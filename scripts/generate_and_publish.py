@@ -1,17 +1,5 @@
 # scripts/generate_and_publish.py
-"""
-Orchestrator:
-- Prefer scraped products.json (amazon_scraper output)
-- For each product title selected:
-    - call generate_posts.generate()
-    - call images.download_image() (OpenAI Images)
-    - render_post() into public/posts/
-- Build index + sitemap, ensure basics
-"""
-
-import os
-import json
-import logging
+import os, json, logging
 from pathlib import Path
 from .trending_aggregator import aggregate_trends
 from .generate_posts import generate
@@ -25,8 +13,6 @@ log.setLevel(logging.INFO)
 
 CONTENT = Path("content")
 PRODUCTS_FILE = CONTENT / "products.json"
-PUBLIC = Path("public")
-
 
 def read_products(limit=20):
     if PRODUCTS_FILE.exists():
@@ -37,26 +23,20 @@ def read_products(limit=20):
             log.warning("Failed to read products.json: %s", e)
     return []
 
-
 def main():
-    posts_info = []
-    markets = os.getenv("MARKETS", "IN,US").split(",")
-    per_market = int(os.getenv("POSTS_PER_MARKET", "2"))
+    posts_info=[]
+    markets = os.getenv("MARKETS","IN,US").split(",")
+    per_market = int(os.getenv("POSTS_PER_MARKET","2"))
 
-    # Prefer product-driven generation if products.json exists
     products = read_products(limit=per_market * len(markets))
     if products:
-        log.info("Using %d scraped products from products.json", len(products))
         topics = [p.get("title") for p in products if p.get("title")]
+        log.info("Using %d scraped products", len(topics))
     else:
-        # As fallback, aggregate titles (this will call amazon bestsellers fallback)
         topics = aggregate_trends(markets=tuple(markets), per_source=per_market)
-        log.info("Collected %d fallback product topics", len(topics))
+        log.info("Using fallback topics: %d", len(topics))
 
-    # Limit to desired number
-    max_posts = per_market * len(markets)
-    chosen = topics[:max_posts]
-
+    chosen = topics[: per_market * len(markets)]
     for t in chosen:
         try:
             meta = generate(t)
@@ -64,26 +44,21 @@ def main():
             try:
                 hero = download_image(t)
             except Exception as e:
-                log.warning("Image generation failed for '%s': %s", t, e)
+                log.warning("Image error: %s", e)
             out = render_post(Path(meta["raw_path"]), title=meta["keyword"].title(), market="IN", hero_url=hero)
             posts_info.append({"title": meta["keyword"].title(), "filename": Path(out).name, "date": today_iso()})
-            log.info("Published: %s -> %s", t, out)
+            log.info("Published: %s", meta["keyword"])
         except Exception as e:
-            log.exception("Failed to generate for topic '%s': %s", t, e)
+            log.exception("Failed to generate for '%s': %s", t, e)
 
-    # Sort newest first
     posts_info = sorted(posts_info, key=lambda x: x["date"], reverse=True)
-
-    # Write index, basics, and sitemap
     write_basics()
     render_index(posts_info)
     try:
         build_sitemap()
     except Exception as e:
         log.warning("Sitemap build failed: %s", e)
-
-    log.info("Generation complete — %d posts published", len(posts_info))
-
+    log.info("Done. %d posts", len(posts_info))
 
 if __name__ == "__main__":
     main()
