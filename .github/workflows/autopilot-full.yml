@@ -3,7 +3,7 @@ name: Autopilot — Amazon Products Generator (gh-pages)
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 3 * * *"   # runs daily at 03:00 UTC
+    - cron: "0 3 * * *"  # daily at 03:00 UTC
 
 permissions:
   contents: write
@@ -17,6 +17,9 @@ jobs:
       POSTS_PER_MARKET: "3"
       SITE_BASE_URL: ${{ secrets.SITE_BASE_URL }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SITE_NAME: ${{ secrets.SITE_NAME }}
+      AFFILIATE_TAG_IN: ${{ secrets.AFFILIATE_TAG_IN }}
+      AFFILIATE_TAG_US: ${{ secrets.AFFILIATE_TAG_US }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,7 +34,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Amazon Scraper
+      - name: Run Amazon Scraper (if present)
         id: scrape
         env:
           PROXY_LIST: ${{ secrets.PROXY_LIST }}
@@ -39,11 +42,21 @@ jobs:
           PA_API_SECRET: ${{ secrets.PA_API_SECRET }}
           PA_API_TAG: ${{ secrets.PA_API_TAG }}
         run: |
-          echo "Scraping Amazon bestsellers and generating content/products.json..."
-          python -u -m scripts.amazon_scraper || echo "Scraper step skipped or failed gracefully."
+          if [ -f scripts/amazon_scraper.py ]; then
+            python -u -m scripts.amazon_scraper || echo "Scraper failed or skipped."
+          else
+            echo "No scripts/amazon_scraper.py found — skipping scraper."
+          fi
 
       - name: Generate Amazon Product Posts
         id: generate
+        run: |
+          if [ -f scripts/generate_and_publish.py ]; then
+            python -u -m scripts.generate_and_publish
+          else
+            echo "Missing scripts/generate_and_publish.py" >&2
+            exit 1
+          fi
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SITE_BASE_URL: ${{ secrets.SITE_BASE_URL }}
@@ -52,20 +65,19 @@ jobs:
           AFFILIATE_TAG_US: ${{ secrets.AFFILIATE_TAG_US }}
           MARKETS: ${{ env.MARKETS }}
           POSTS_PER_MARKET: ${{ env.POSTS_PER_MARKET }}
-        run: |
-          echo "Generating posts from Amazon products..."
-          python -u -m scripts.generate_and_publish
 
       - name: Ensure non-empty public (avoid 404)
         run: |
           python -u -m scripts.ensure_public
 
-      - name: Debug: List generated files
+      - name: Debug: list public
         run: |
-          echo "==== PUBLIC CONTENT STRUCTURE ===="
-          ls -R public || true
+          echo "==== PUBLIC ===="
+          ls -la public || true
+          echo "==== POSTS ===="
+          ls -la public/posts || true
           echo "==== INDEX PREVIEW ===="
-          head -n 30 public/index.html || true
+          head -n 40 public/index.html || true
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
