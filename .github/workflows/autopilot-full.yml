@@ -1,19 +1,18 @@
-name: Autopilot — Amazon Products Generator (gh-pages)
+name: Autopilot Amazon Generator
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   schedule:
-    - cron: "0 3 * * *"  # daily at 03:00 UTC
+    - cron: "0 3 * * *"
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     env:
-      # set job-level environment from secrets (GitHub will expand these)
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SITE_BASE_URL: ${{ secrets.SITE_BASE_URL }}
       SITE_NAME: ${{ secrets.SITE_NAME }}
@@ -27,11 +26,9 @@ jobs:
       POSTS_PER_MARKET: "3"
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -40,35 +37,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Amazon scraper (if present)
+      - name: Run scraper
         run: |
           if [ -f scripts/amazon_scraper.py ]; then
-            python -u -m scripts.amazon_scraper || echo "Scraper failed or skipped."
-          else
-            echo "No scripts/amazon_scraper.py found — skipping scraper."
+            python -u -m scripts.amazon_scraper || echo "scraper failed"
           fi
 
-      - name: Generate Amazon product posts
+      - name: Generate posts
         run: |
-          if [ -f scripts/generate_and_publish.py ]; then
-            python -u -m scripts.generate_and_publish
-          else
-            echo "Missing scripts/generate_and_publish.py" >&2
-            exit 1
-          fi
+          python -u -m scripts.generate_and_publish
 
-      - name: Ensure public (avoid 404)
+      - name: Ensure public folder
         run: |
           python -u -m scripts.ensure_public
-
-      - name: Debug: list public files
-        run: |
-          echo "=== public tree ==="
-          ls -la public || true
-          echo "=== posts list ==="
-          ls -la public/posts || true
-          echo "=== index head ==="
-          head -n 40 public/index.html || true
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
@@ -77,5 +58,3 @@ jobs:
           publish_branch: gh-pages
           publish_dir: ./public
           force_orphan: true
-          user_name: github-actions[bot]
-          user_email: github-actions[bot]@users.noreply.github.com
