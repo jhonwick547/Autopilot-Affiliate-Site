@@ -1,9 +1,9 @@
-name: Autopilot — Scrape, Generate, Render, Deploy (gh-pages)
+name: Autopilot — Amazon Products Generator (gh-pages)
 
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 2 * * *"   # daily at 02:00 UTC
+    - cron: "0 3 * * *"   # runs daily at 03:00 UTC
 
 permissions:
   contents: write
@@ -31,7 +31,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run scraper (if present)
+      - name: Run Amazon Scraper
         id: scrape
         env:
           PROXY_LIST: ${{ secrets.PROXY_LIST }}
@@ -39,13 +39,10 @@ jobs:
           PA_API_SECRET: ${{ secrets.PA_API_SECRET }}
           PA_API_TAG: ${{ secrets.PA_API_TAG }}
         run: |
-          if [ -f scripts/amazon_scraper.py ]; then
-            python -u -m scripts.amazon_scraper || true
-          else
-            echo "No scripts/amazon_scraper.py found — skipping scraper step."
-          fi
+          echo "Scraping Amazon bestsellers and generating content/products.json..."
+          python -u -m scripts.amazon_scraper || echo "Scraper step skipped or failed gracefully."
 
-      - name: Run generator & publish (creates public/)
+      - name: Generate Amazon Product Posts
         id: generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -56,26 +53,21 @@ jobs:
           MARKETS: ${{ env.MARKETS }}
           POSTS_PER_MARKET: ${{ env.POSTS_PER_MARKET }}
         run: |
-          if [ -f scripts/generate_and_publish.py ]; then
-            python -u -m scripts.generate_and_publish
-          else
-            echo "ERROR: scripts/generate_and_publish.py not found"; exit 1
-          fi
+          echo "Generating posts from Amazon products..."
+          python -u -m scripts.generate_and_publish
 
       - name: Ensure non-empty public (avoid 404)
         run: |
           python -u -m scripts.ensure_public
 
-      - name: Show public files (debug)
+      - name: Debug: List generated files
         run: |
-          echo "PUBLIC files:"
-          ls -la public || true
-          echo "POSTS:"
-          ls -la public/posts || true
-          echo "INDEX HEAD:"
-          head -n 40 public/index.html || true
+          echo "==== PUBLIC CONTENT STRUCTURE ===="
+          ls -R public || true
+          echo "==== INDEX PREVIEW ===="
+          head -n 30 public/index.html || true
 
-      - name: Deploy to gh-pages (push public/ to gh-pages branch)
+      - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
