@@ -12,7 +12,8 @@
     <div>
       {% for p in posts %}
       <article style="border:1px solid #eee;padding:12px;border-radius:8px;margin:12px 0">
-        <a href="{{ base_path }}/posts/{{ p.filename }}"><strong>{{ p.title }}</strong></a>
+        <!-- RELATIVE LINK: no leading slash -->
+        <a href="posts/{{ p.filename }}"><strong>{{ p.title }}</strong></a>
         <div style="color:#777;font-size:.9rem">{{ p.date }}</div>
       </article>
       {% endfor %}
