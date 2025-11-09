@@ -1,0 +1,125 @@
+name: Autopilot — Scrape, Generate, Render, Deploy (gh-pages)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 2 * * *"   # daily at 02:00 UTC
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      MARKETS: "IN,US"
+      POSTS_PER_MARKET: "3"
+      SITE_BASE_URL: ${{ secrets.SITE_BASE_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run scraper (Amazon PA-API preferred, fallback to scraping)
+        id: scrape
+        env:
+          PROXY_LIST: ${{ secrets.PROXY_LIST }}
+          PA_API_ACCESS_KEY: ${{ secrets.PA_API_ACCESS_KEY }}
+          PA_API_SECRET: ${{ secrets.PA_API_SECRET }}
+          PA_API_TAG: ${{ secrets.PA_API_TAG }}
+        run: |
+          echo "Running amazon scraper (should produce content/products.json)"
+          if [ -f scripts/amazon_scraper.py ]; then
+            python -u -m scripts.amazon_scraper || true
+          else
+            echo "No scripts/amazon_scraper.py found — skipping scraper step."
+          fi
+          echo "Scrape done."
+
+      - name: Run generator & publish (creates public/)
+        id: generate
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SITE_BASE_URL: ${{ secrets.SITE_BASE_URL }}
+          SITE_NAME: ${{ secrets.SITE_NAME }}
+          AFFILIATE_TAG_IN: ${{ secrets.AFFILIATE_TAG_IN }}
+          AFFILIATE_TAG_US: ${{ secrets.AFFILIATE_TAG_US }}
+          MARKETS: ${{ env.MARKETS }}
+          POSTS_PER_MARKET: ${{ env.POSTS_PER_MARKET }}
+        run: |
+          set -e
+          echo "Running generate_and_publish (should write into public/)"
+          if [ -f scripts/generate_and_publish.py ]; then
+            python -u -m scripts.generate_and_publish
+          else
+            echo "ERROR: scripts/generate_and_publish.py not found"; exit 1
+          fi
+
+      - name: Ensure non-empty public (fallback to avoid 404)
+        run: |
+          python - <<'PY'
+import os
+from pathlib import Path
+ROOT = Path('.').resolve()
+PUBLIC = ROOT / 'public'
+POSTS = PUBLIC / 'posts'
+PUBLIC.mkdir(parents=True, exist_ok=True)
+POSTS.mkdir(parents=True, exist_ok=True)
+if not any(POSTS.glob('*.html')):
+    fallback_post = POSTS / 'welcome-placeholder.html'
+    fallback_html = f"""<!doctype html>
+<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Welcome — Autopilot Affiliate Site</title></head>
+<body>
+<header style='background:#0b6ef6;color:#fff;padding:28px;text-align:center;'>
+  <h1>Welcome — Autopilot Affiliate Site</h1>
+  <p>Placeholder article created automatically to ensure the site is never 404.</p>
+</header>
+<main style='max-width:900px;margin:28px auto;padding:12px;'>
+  <h2>Auto Generated Placeholder</h2>
+  <p>This placeholder exists because the pipeline produced no posts this run. Check Actions logs.</p>
+</main>
+<footer style='text-align:center;padding:12px;color:#666'>© {os.getenv('SITE_NAME','Affiliate Site')}</footer>
+</body></html>"""
+    fallback_post.write_text(fallback_html, encoding='utf-8')
+index = PUBLIC / 'index.html'
+if not index.exists():
+    posts_list = []
+    for p in sorted(POSTS.glob('*.html')):
+        posts_list.append(f"<li><a href='posts/{p.name}'>{p.stem.replace('-',' ').title()}</a></li>")
+    listing = "<ul>" + ("\n".join(posts_list) if posts_list else "<li>Welcome — no posts yet</li>") + "</ul>"
+    index_html = f"""<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>{os.getenv('SITE_NAME','Affiliate Site')}</title></head><body><header style='background:#0b6ef6;color:#fff;padding:24px;text-align:center;'><h1>{os.getenv('SITE_NAME','Affiliate Site')}</h1></header><main style='max-width:900px;margin:20px auto;padding:12px;'><h2>Latest Posts</h2>{listing}</main><footer style='text-align:center;padding:12px;color:#666'>© {os.getenv('SITE_NAME','Affiliate Site')}</footer></body></html>"""
+    index.write_text(index_html, encoding='utf-8')
+(ROOT / 'public' / '.nojekyll').write_text('', encoding='utf-8')
+print("Ensure_public done.")
+PY
+
+      - name: Show public files (debug)
+        run: |
+          echo "PUBLIC files:"
+          ls -la public || true
+          echo "POSTS:"
+          ls -la public/posts || true
+          echo "INDEX HEAD:"
+          head -n 40 public/index.html || true
+
+      - name: Deploy to gh-pages (push public/ to gh-pages branch)
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./public
+          force_orphan: true
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
