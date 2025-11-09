@@ -7,24 +7,28 @@
   <meta name="description" content="{{ meta_description }}">
   <link rel="canonical" href="{{ canonical_url }}">
   <meta name="robots" content="index, follow">
-  <style>
-    body{font-family:Inter, system-ui, sans-serif;max-width:900px;margin:24px auto;color:#111}
-    header{background:#0073e6;color:#fff;padding:20px;border-radius:6px}
-    .hero{width:100%;border-radius:8px;margin:14px 0}
-    .product-card{border:1px solid #e6e6e6;padding:12px;border-radius:8px;margin:12px 0;background:#fafafa}
-    .buy-btn{display:inline-block;background:#ff6a00;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:600}
-  </style>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "{{ title | e }}",
+    "image": {{ hero_url | tojson if hero_url else "[]" }},
+    "description": "{{ meta_description | e }}",
+    "mainEntityOfPage": {"@type":"WebPage","@id":"{{ canonical_url }}"}
+  }
+  </script>
+  <style>body{font-family:Inter,system-ui,sans-serif;max-width:900px;margin:24px auto;color:#111}</style>
 </head>
 <body>
-  <header><h1>{{ title }}</h1><p style="opacity:.9">{{ site_name }}</p></header>
+  <header style="background:#0073e6;color:#fff;padding:20px;border-radius:6px"><h1>{{ title }}</h1><p style="opacity:.9">{{ site_name }}</p></header>
   <main>
-    {% if hero_url %}<img class="hero" src="{{ hero_url }}" alt="{{ title }} hero" />{% endif %}
+    {% if hero_url %}<img src="{{ hero_url }}" alt="{{ title }}" style="width:100%;border-radius:8px;margin:12px 0"/>{% endif %}
     {{ content|safe }}
     <section style="margin-top:32px;border-top:1px solid #eee;padding-top:12px;">
       <h3>Affiliate disclosure</h3>
       <p>This article contains affiliate links. We may earn a commission from qualifying purchases.</p>
     </section>
   </main>
-  <footer style="text-align:center;padding:24px;color:#777">© {{ year }} {{ site_name }}</footer>
+  <footer style="text-align:center;padding:24px;color:#777">&copy; {{ year }} {{ site_name }}</footer>
 </body>
 </html>
