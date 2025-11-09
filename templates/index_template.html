@@ -4,19 +4,27 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>{{ site_name }}</title>
-  <style>body{font-family:Inter,system-ui,sans-serif;max-width:1000px;margin:28px auto;padding:8px}a{color:#0073e6;text-decoration:none}</style>
+  <style>
+    body{font-family:Inter,system-ui,sans-serif;max-width:1000px;margin:28px auto;padding:8px}
+    a{color:#0073e6;text-decoration:none}
+    .card{border:1px solid #eee;padding:12px;border-radius:8px;margin:12px 0}
+    .muted{color:#777;font-size:.9rem}
+  </style>
 </head>
 <body>
-  <header><h1>{{ site_name }}</h1><p>Latest generated buying guides</p></header>
+  <header><h1>{{ site_name }}</h1><p>Latest generated product guides</p></header>
   <main>
     <div>
       {% for p in posts %}
-      <article style="border:1px solid #eee;padding:12px;border-radius:8px;margin:12px 0">
-        <!-- RELATIVE LINK: no leading slash -->
+      <article class="card">
+        <!-- RELATIVE: no leading slash, works on project pages -->
         <a href="posts/{{ p.filename }}"><strong>{{ p.title }}</strong></a>
-        <div style="color:#777;font-size:.9rem">{{ p.date }}</div>
+        <div class="muted">{{ p.date }}</div>
       </article>
       {% endfor %}
+      {% if posts|length == 0 %}
+      <div class="card"><p>No posts yet — the generator will publish product guides soon.</p></div>
+      {% endif %}
     </div>
   </main>
 </body>
