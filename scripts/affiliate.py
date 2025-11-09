@@ -1,26 +1,17 @@
+# scripts/affiliate.py
 from bs4 import BeautifulSoup
 import re
-from .site_config import AFFILIATE_TAGS, AMAZON_DOMAINS
-
-PRODUCT_HINTS = ["monitor","laptop","headphone","keyboard","mouse","webcam","tv","smartphone","tablet","camera","router","ssd","hdd","mic","projector","speaker","printer"]
-
-def build_aff_link(keyword: str, market: str) -> str:
-    tag = AFFILIATE_TAGS.get(market, next(iter(AFFILIATE_TAGS.values())))
-    domain = AMAZON_DOMAINS.get(market, "amazon.com")
-    safe_kw = re.sub(r"[^a-zA-Z0-9\\s]", "", keyword).strip().replace(" ", "+")
-    return f"https://www.{domain}/s?k={safe_kw}&tag={tag}"
-
-def inject_affiliate_links(html: str, market: str) -> str:
+from .site_config import SITE_BASE_URL
+def build_aff_link(keyword, market):
+    return f"{SITE_BASE_URL}/search?q={keyword.replace(' ','+')}"
+def inject_affiliate_links(html, market):
     soup = BeautifulSoup(html, "html.parser")
-    candidates = soup.find_all(["p","li","h2","h3"])
-    for el in candidates:
-        text = el.get_text(" ", strip=True)
-        if len(text) < 20 or el.find("a"):
-            continue
-        if any(h in text.lower() for h in PRODUCT_HINTS):
-            kw = " ".join(text.split()[:5])
-            a = soup.new_tag("a", href=build_aff_link(kw, market), target="_blank", rel="nofollow noopener noreferrer", **{"class":"buy-btn"})
+    for p in soup.find_all(["p","li"]):
+        if p.find("a"): continue
+        text = p.get_text(" ", strip=True)
+        if len(text.split())>6:
+            a = soup.new_tag("a", href=build_aff_link(" ".join(text.split()[:4]), market), rel="nofollow noopener noreferrer")
             a.string = "Buy on Amazon"
-            el.append(" ")
-            el.append(a)
+            p.append(" ")
+            p.append(a)
     return str(soup)
