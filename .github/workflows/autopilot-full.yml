@@ -1,18 +1,25 @@
-name: Autopilot Amazon Generator
+name: Autopilot — Amazon Products Generator (gh-pages)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 3 * * *"  # daily at 03:00 UTC
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     env:
+      # runtime settings
+      MARKETS: "IN,US"
+      POSTS_PER_MARKET: "3"
+      OPENAI_MODEL: "gpt-4o-mini"
+      OPENAI_IMAGE_SIZE: "1024x512"
+      OPENAI_MAX_TOKENS: "2200"
+      # secrets - GitHub will expand these at run time
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SITE_BASE_URL: ${{ secrets.SITE_BASE_URL }}
       SITE_NAME: ${{ secrets.SITE_NAME }}
@@ -22,13 +29,13 @@ jobs:
       PA_API_SECRET: ${{ secrets.PA_API_SECRET }}
       PA_API_TAG: ${{ secrets.PA_API_TAG }}
       PROXY_LIST: ${{ secrets.PROXY_LIST }}
-      MARKETS: "IN,US"
-      POSTS_PER_MARKET: "3"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -37,19 +44,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run scraper
+      - name: Run Amazon scraper (safe fallback)
         run: |
           if [ -f scripts/amazon_scraper.py ]; then
-            python -u -m scripts.amazon_scraper || echo "scraper failed"
+            python -u -m scripts.amazon_scraper || echo "scraper failed or produced no products"
+          else
+            echo "no scraper found - skipping"
           fi
 
-      - name: Generate posts
+      - name: Generate Amazon product posts
         run: |
           python -u -m scripts.generate_and_publish
 
-      - name: Ensure public folder
+      - name: Ensure public (avoid 404)
         run: |
           python -u -m scripts.ensure_public
+
+      - name: Upload artifacts (for debugging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: autopilot-artifacts
+          path: |
+            content/products.json
+            public
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
