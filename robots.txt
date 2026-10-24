@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://github.com/jhonwick547/Autopilot-Affiliate-Site/sitemap_index.xml
